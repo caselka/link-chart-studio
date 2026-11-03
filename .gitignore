@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.json.bak
+# Never commit case data
+cases/
