@@ -86,6 +86,13 @@ h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;c
       <input id="search" placeholder="Search entities">
     </div>
     <div class="grp">
+      <span class="lbl">File</span>
+      <button id="bOpen" title="Open a saved .json graph from your computer">Open</button>
+      <button id="bSave" title="Save to a file on your computer (Ctrl+S)">Save</button>
+      <button id="bSaveAs" title="Save to a new file">Save as</button>
+      <input type="file" id="oFile" accept=".json,application/json" style="display:none">
+    </div>
+    <div class="grp">
       <button id="bExport">Export</button>
       <button id="bImport">Import</button>
       <button id="bSample">Sample</button>
@@ -114,6 +121,7 @@ h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;c
     <span id="stCounts"></span>
     <span id="stSel"></span>
     <span id="stSave"></span>
+    <span id="stFile"></span>
   </div>
 </div>
 
@@ -206,7 +214,40 @@ function serialise(){
     nodes:nodes.get().map(n=>({id:n.id,type:n.type,label:n.label,notes:n.notes||'',bookmark:n.bookmark||null,weight:n.weight??50,x:Math.round(pos[n.id]?.x||0),y:Math.round(pos[n.id]?.y||0)})),
     edges:edges.get().map(e=>({id:e.id,from:e.from,to:e.to,label:e.label||'',color:typeof e.color==='object'?e.color.color:e.color,width:e.width}))};
 }
+let fileHandle=null,fileName=null,dirty=false;
+const FILE_TYPES=[{description:'Link chart',accept:{'application/json':['.json']}}];
+function fileStatus(msg){
+  $('stFile').textContent=msg||(fileName?`File: ${fileName}${dirty?' · unsaved changes':''}`:'Not saved to a file yet');
+  $('stFile').style.color=dirty?'#f6c77a':'';
+}
+async function saveFile(as){
+  const text=JSON.stringify(serialise(),null,2);
+  if(window.showSaveFilePicker){
+    try{
+      if(as||!fileHandle)fileHandle=await showSaveFilePicker({suggestedName:fileName||'link-chart.json',types:FILE_TYPES});
+      const w=await fileHandle.createWritable();await w.write(text);await w.close();
+      fileName=fileHandle.name;
+    }catch(e){if(e.name!=='AbortError')fileStatus('Couldn\'t save the file');return}
+  }else{
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));
+    a.download=fileName||'link-chart.json';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);fileName=a.download;
+  }
+  dirty=false;fileStatus();
+}
+function openText(text,name){
+  let d;try{d=JSON.parse(text)}catch(e){}
+  if(!d||!Array.isArray(d.nodes)||!Array.isArray(d.edges)){fileStatus('That file isn\'t a link chart graph');return false}
+  load(d);fileName=name;save();dirty=false;fileStatus();return true;
+}
+async function openFile(){
+  if(window.showOpenFilePicker){
+    try{const [h]=await showOpenFilePicker({types:FILE_TYPES});const f=await h.getFile();if(openText(await f.text(),f.name))fileHandle=h}
+    catch(e){if(e.name!=='AbortError')fileStatus('Couldn\'t open the file')}
+  }else $('oFile').click();
+}
 function save(){
+  if(fileName){dirty=true;fileStatus()}
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>{try{localStorage.setItem(STORE,JSON.stringify(serialise()));$('stSave').textContent='Saved in this browser'}catch(e){$('stSave').textContent=''}},400);
 }
@@ -397,13 +438,18 @@ function boot(){
   $('bSample').onclick=()=>{load(SAMPLE);save()};
   let newArmed=false;
   $('bNew').onclick=()=>{if(!newArmed){newArmed=true;$('bNew').textContent='Click again to clear';setTimeout(()=>{newArmed=false;$('bNew').textContent='New'},2500);return}
-    newArmed=false;$('bNew').textContent='New';nodes.clear();edges.clear();renderProps();counts();save()};
+    newArmed=false;$('bNew').textContent='New';nodes.clear();edges.clear();renderProps();counts();fileHandle=null;fileName=null;save();dirty=false;fileStatus()};
+  $('bOpen').onclick=openFile;$('bSave').onclick=()=>saveFile(false);$('bSaveAs').onclick=()=>saveFile(true);
+  $('oFile').onchange=e=>{const f=e.target.files[0];if(f)f.text().then(t=>openText(t,f.name));e.target.value=''};
+  window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
   $('mClose').onclick=()=>$('modal').style.display='none';
   $('mCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('mText').value);$('mMsg').textContent='Copied to clipboard'}catch(e){$('mText').select();$('mMsg').textContent='Press Ctrl+C or Cmd+C to copy'}};
   $('mFileBtn').onclick=()=>$('mFile').click();
   $('mFile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{$('mText').value=t;$('mMsg').textContent=f.name+' loaded. Click Load graph.'})};
   $('mApply').onclick=()=>{try{const d=JSON.parse($('mText').value);if(!Array.isArray(d.nodes)||!Array.isArray(d.edges))throw 0;load(d);save();$('modal').style.display='none'}catch(e){$('mMsg').textContent='That doesn\'t look like a valid graph export.';$('mMsg').style.color='#ffb3ae';setTimeout(()=>$('mMsg').style.color='',2000)}};
   document.addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveFile(e.shiftKey);return}
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){e.preventDefault();openFile();return}
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;
     if(e.key==='Delete'||e.key==='Backspace'){deleteSel();e.preventDefault()}
     if(e.key==='Escape'){setLinkMode(false);network.unselectAll();renderProps()}
@@ -412,6 +458,7 @@ function boot(){
 
   let saved=null;try{saved=JSON.parse(localStorage.getItem(STORE)||'null')}catch(e){}
   load(saved&&saved.nodes?saved:SAMPLE);
+  fileStatus();
 }
 </script>
 <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js';s.onload=boot;s.onerror=boot;document.body.appendChild(s)" onload="boot()"></script>
