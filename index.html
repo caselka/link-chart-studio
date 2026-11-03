@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Link Chart Studio</title>
+<style>
+:root{
+  --bg:#14171c;--panel:#1b1f26;--panel2:#222731;--line:#2e3440;--text:#e3e6eb;--muted:#8b93a1;
+  --accent:#3b8bf0;--accent2:#f0a23b;--danger:#e5534b;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:var(--text)}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:#4a5263;background:#29303b}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+button.warn:hover{border-color:var(--danger);color:#ffb3ae}
+input,select,textarea{background:#12151a;border:1px solid var(--line);border-radius:6px;padding:6px 8px;width:100%}
+textarea{resize:vertical;min-height:70px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+#app{display:grid;grid-template-rows:auto 1fr auto;height:100vh}
+#ribbon{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+#ribbon .grp{display:flex;gap:4px;align-items:center;padding-right:8px;margin-right:2px;border-right:1px solid var(--line)}
+#ribbon .grp:last-child{border-right:none}
+#ribbon .lbl{color:var(--muted);font-size:11px;margin-right:2px}
+#brand{font-weight:600;letter-spacing:.2px;margin-right:6px}
+#search{width:170px}
+#main{display:grid;grid-template-columns:190px 1fr 280px;min-height:0}
+#palette,#props{background:var(--panel);overflow:auto;min-height:0}
+#palette{border-right:1px solid var(--line);padding:10px}
+#props{border-left:1px solid var(--line);padding:12px}
+h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:4px 0 8px}
+.ent{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:grab;user-select:none;border:1px solid transparent}
+.ent:hover{background:var(--panel2);border-color:var(--line)}
+.ent img{width:22px;height:22px}
+.hint{color:var(--muted);font-size:12px;margin-top:10px}
+#canvasWrap{position:relative;min-height:0}
+#net{position:absolute;inset:0;background:var(--bg)}
+#modeBanner{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;padding:5px 12px;border-radius:14px;font-size:12px;display:none;z-index:5}
+#fict{position:absolute;bottom:10px;left:10px;font-size:11px;color:#f6c77a;background:rgba(240,162,59,.12);border:1px solid rgba(240,162,59,.35);padding:3px 8px;border-radius:10px;z-index:5}
+.field{margin-bottom:10px}
+.field label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+.bm{display:flex;gap:6px}
+.bm span{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.bm span.sel{border-color:#fff}
+.bm span.none{background:transparent;border:1px dashed var(--muted)}
+.bm span.none.sel{border:2px solid #fff}
+.links a{display:block;color:var(--text);text-decoration:none;padding:4px 6px;border-radius:4px;cursor:pointer}
+.links a:hover{background:var(--panel2)}
+.links small{color:var(--muted)}
+.typebadge{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-bottom:10px}
+.typebadge img{width:26px;height:26px}
+#status{display:flex;gap:16px;padding:5px 12px;background:var(--panel);border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:20}
+#modal .box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;width:min(560px,92vw)}
+#modal textarea{min-height:220px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+#modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
+#modal .msg{flex:1;color:var(--muted);font-size:12px}
+#loadErr{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:20px}
+@media (max-width:820px){#main{grid-template-columns:1fr}#palette,#props{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="ribbon">
+    <span id="brand">Link Chart Studio</span>
+    <div class="grp">
+      <button id="bLink" title="Click one entity, then another, to link them">Add link</button>
+      <button id="bDelete" class="warn" title="Delete the selection">Delete</button>
+    </div>
+    <div class="grp">
+      <span class="lbl">Layout</span>
+      <button data-layout="organic">Organic</button>
+      <button data-layout="hier">Hierarchical</button>
+      <button data-layout="circle">Circular</button>
+      <button data-layout="block">Block</button>
+    </div>
+    <div class="grp">
+      <span class="lbl">View</span>
+      <button id="vMain" class="on">Main</button>
+      <button id="vBubble">Bubble</button>
+      <button id="bFit">Fit</button>
+    </div>
+    <div class="grp">
+      <input id="search" placeholder="Search entities">
+    </div>
+    <div class="grp">
+      <button id="bExport">Export</button>
+      <button id="bImport">Import</button>
+      <button id="bSample">Sample</button>
+      <button id="bNew" class="warn">New</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <aside id="palette">
+      <h3>Entity palette</h3>
+      <div id="entList"></div>
+      <p class="hint">Drag an entity onto the canvas, or click to add it in the middle. Double-click empty canvas to add a phrase.</p>
+    </aside>
+
+    <div id="canvasWrap">
+      <div id="net"></div>
+      <div id="modeBanner">Link mode: click the source entity</div>
+      <div id="fict">Sample data is fictional</div>
+      <div id="loadErr">The graph library didn't load. Check your connection and reload the page.</div>
+    </div>
+
+    <aside id="props"><div id="propBody"></div></aside>
+  </div>
+
+  <div id="status">
+    <span id="stCounts"></span>
+    <span id="stSel"></span>
+    <span id="stSave"></span>
+  </div>
+</div>
+
+<div id="modal"><div class="box">
+  <h3 id="mTitle">Export</h3>
+  <textarea id="mText" spellcheck="false"></textarea>
+  <div class="row">
+    <span class="msg" id="mMsg"></span>
+    <input type="file" id="mFile" accept=".json,application/json" style="width:auto;display:none">
+    <button id="mFileBtn" style="display:none">Open file</button>
+    <button id="mCopy">Copy</button>
+    <button id="mApply" style="display:none">Load graph</button>
+    <button id="mClose">Close</button>
+  </div>
+</div></div>
+
+<script>
+const TYPES={
+  person:{name:'Person',color:'#8f84f0',glyph:'<circle cx="16" cy="11" r="5"/><path d="M6 27c0-6 4.5-9 10-9s10 3 10 9z"/>'},
+  alias:{name:'Alias',color:'#b39cf5',glyph:'<circle cx="16" cy="11" r="5" fill="none" stroke="#fff" stroke-width="2.4"/><path d="M6 27c0-6 4.5-9 10-9s10 3 10 9" fill="none" stroke="#fff" stroke-width="2.4"/>'},
+  email:{name:'Email address',color:'#2fb38a',glyph:'<rect x="5" y="9" width="22" height="15" rx="2"/><path d="M5.5 10l10.5 8 10.5-8" fill="none" stroke="#1d7a5d" stroke-width="2"/>'},
+  phone:{name:'Phone number',color:'#2fa3b3',glyph:'<rect x="10" y="4" width="12" height="24" rx="3"/><rect x="12.5" y="7.5" width="7" height="14" rx="1" fill="#1e6f7a"/>'},
+  account:{name:'Social account',color:'#e0628f',glyph:'<circle cx="16" cy="16" r="10" fill="none" stroke="#fff" stroke-width="2.6"/><circle cx="16" cy="16" r="4"/><path d="M20 12v6c0 2 3 2 3-1" fill="none" stroke="#fff" stroke-width="2.4"/>'},
+  org:{name:'Organisation',color:'#e5774a',glyph:'<rect x="7" y="6" width="18" height="21" rx="1"/><g fill="#9c4421"><rect x="10" y="9" width="3" height="3"/><rect x="15" y="9" width="3" height="3"/><rect x="20" y="9" width="2" height="3"/><rect x="10" y="15" width="3" height="3"/><rect x="15" y="15" width="3" height="3"/><rect x="14" y="21" width="4" height="6"/></g>'},
+  domain:{name:'Domain',color:'#4b8ff0',glyph:'<circle cx="16" cy="16" r="10" fill="none" stroke="#fff" stroke-width="2.4"/><ellipse cx="16" cy="16" rx="4.5" ry="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 16h20" stroke="#fff" stroke-width="2"/>'},
+  ip:{name:'IP address',color:'#6c7ea0',glyph:'<rect x="5" y="8" width="22" height="7" rx="1.5"/><rect x="5" y="17" width="22" height="7" rx="1.5"/><g fill="#3e4a60"><circle cx="9" cy="11.5" r="1.4"/><circle cx="9" cy="20.5" r="1.4"/></g>'},
+  website:{name:'Website',color:'#3fa0e0',glyph:'<rect x="4" y="7" width="24" height="18" rx="2"/><rect x="4" y="7" width="24" height="5" rx="2" fill="#226a99"/><g fill="#fff"><circle cx="7.5" cy="9.5" r="1"/><circle cx="10.5" cy="9.5" r="1"/></g>'},
+  location:{name:'Location',color:'#d9a033',glyph:'<path d="M16 4c-5 0-9 3.8-9 8.8C7 19 16 28 16 28s9-9 9-15.2C25 7.8 21 4 16 4z"/><circle cx="16" cy="12.5" r="3.4" fill="#8a6214"/>'},
+  vehicle:{name:'Vehicle',color:'#9aa34a',glyph:'<path d="M5 20l2.5-7h17L27 20v5H5z"/><g fill="#5c6224"><circle cx="10" cy="24" r="2.6"/><circle cx="22" cy="24" r="2.6"/><rect x="9.5" y="14.5" width="13" height="4"/></g>'},
+  document:{name:'Document',color:'#a3a9b5',glyph:'<path d="M8 4h11l6 6v18H8z"/><path d="M19 4v6h6" fill="#6b7280"/><g stroke="#6b7280" stroke-width="1.6"><path d="M11 16h11M11 20h11M11 24h7"/></g>'},
+  phrase:{name:'Phrase',color:'#c9ced8',glyph:'<path d="M6 9h20v12H14l-6 5v-5H6z"/><g stroke="#7a818e" stroke-width="1.6"><path d="M10 13.5h12M10 17h8"/></g>'}
+};
+const BOOKMARKS={none:null,green:'#3fb950',blue:'#4b8ff0',yellow:'#e3c341',orange:'#f0883e',purple:'#a371f7'};
+
+const iconCache={};
+function iconFor(type,bookmark){
+  const k=type+'|'+(bookmark||'');
+  if(iconCache[k])return iconCache[k];
+  const t=TYPES[type]||TYPES.phrase;
+  const bm=BOOKMARKS[bookmark];
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="${t.color}"/><g fill="#fff">${t.glyph}</g>${bm?`<g><circle cx="26" cy="6" r="5" fill="#14171c"/><path d="M23.5 2.8v6.6M23.5 3h5l-1.4 1.8 1.4 1.8h-5z" fill="${bm}" stroke="${bm}" stroke-width="1"/></g>`:''}</svg>`;
+  return iconCache[k]='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+
+const SAMPLE={nodes:[
+  {id:'n1',type:'person',label:'Alex Rowan',notes:'Seed entity. Fictional subject.',bookmark:'orange',weight:100},
+  {id:'n2',type:'email',label:'alex.r@example.com',notes:'Portfolio contact page.',weight:80},
+  {id:'n3',type:'email',label:'jt.design@example.net',notes:'Registrant on domain record.',weight:60},
+  {id:'n4',type:'phone',label:'0491 570 156',notes:'Fictional number range.',weight:60},
+  {id:'n5',type:'account',label:'@arowan_dev',notes:'Code hosting account.',weight:70},
+  {id:'n6',type:'alias',label:'jt_designs',notes:'Forum handle, same avatar.',weight:40},
+  {id:'n7',type:'org',label:'Coastline Studio',notes:'Employer 2021 to 2024.',weight:70},
+  {id:'n8',type:'org',label:'Rowan Design Pty',notes:'Sole trader business.',weight:70},
+  {id:'n9',type:'domain',label:'rowan.example',notes:'Portfolio domain.',bookmark:'blue',weight:70},
+  {id:'n10',type:'ip',label:'203.0.113.42',notes:'Documentation IP range.',weight:50},
+  {id:'n11',type:'website',label:'www.rowan.example',notes:'',weight:50},
+  {id:'n12',type:'person',label:'Mara Kell',notes:'Co-worker.',weight:40},
+  {id:'n13',type:'person',label:'Dev Ostrin',notes:'Co-director.',weight:40},
+  {id:'n14',type:'location',label:'Fictionville',notes:'Profile bio location.',weight:40}
+],edges:[
+  {from:'n1',to:'n2',label:'uses'},{from:'n1',to:'n3',label:'uses'},{from:'n1',to:'n4',label:'owns'},
+  {from:'n1',to:'n5',label:'operates'},{from:'n5',to:'n6',label:'avatar match'},{from:'n1',to:'n7',label:'worked at'},
+  {from:'n1',to:'n8',label:'owns'},{from:'n8',to:'n9',label:'website'},{from:'n9',to:'n10',label:'resolves to'},
+  {from:'n9',to:'n11',label:'hosts'},{from:'n3',to:'n9',label:'registrant',color:'#e5534b',width:2.5},
+  {from:'n7',to:'n12',label:'employs'},{from:'n8',to:'n13',label:'director'},{from:'n1',to:'n14',label:'lives in'},
+  {from:'n5',to:'n2',label:'linked email'}
+]};
+
+const $=id=>document.getElementById(id);
+let nodes,edges,network,linkMode=false,linkFrom=null,bubble=false,currentLayout='organic',saveTimer=null;
+const STORE='linkchart-studio-v1';
+
+function decorate(n){
+  const base=bubble?14+Math.min(40,degree(n.id)*6):22;
+  return Object.assign({},n,{shape:'image',image:iconFor(n.type,n.bookmark),size:base,title:undefined});
+}
+function degree(id){return edges?edges.get({filter:e=>e.from===id||e.to===id}).length:0}
+function edgeStyle(e){return Object.assign({},e,{color:{color:e.color||'#6b7383',highlight:'#f0a23b',hover:'#9aa3b4'},width:e.width||1.2})}
+
+function load(data){
+  nodes.clear();edges.clear();
+  edges.add((data.edges||[]).map((e,i)=>edgeStyle(Object.assign({id:e.id||'e'+Date.now()+'_'+i},e))));
+  nodes.add((data.nodes||[]).map(n=>decorate(Object.assign({weight:50,notes:'',bookmark:null},n))));
+  applyLayout(data.layout||'organic',true);
+  renderProps();counts();
+}
+function serialise(){
+  const pos=network.getPositions();
+  return {app:'link-chart-studio',version:1,layout:currentLayout,
+    nodes:nodes.get().map(n=>({id:n.id,type:n.type,label:n.label,notes:n.notes||'',bookmark:n.bookmark||null,weight:n.weight??50,x:Math.round(pos[n.id]?.x||0),y:Math.round(pos[n.id]?.y||0)})),
+    edges:edges.get().map(e=>({id:e.id,from:e.from,to:e.to,label:e.label||'',color:typeof e.color==='object'?e.color.color:e.color,width:e.width}))};
+}
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{try{localStorage.setItem(STORE,JSON.stringify(serialise()));$('stSave').textContent='Saved in this browser'}catch(e){$('stSave').textContent=''}},400);
+}
+function counts(){$('stCounts').textContent=`${nodes.length} entities · ${edges.length} links`}
+
+function physicsOptions(on){return {physics:{enabled:on,solver:'forceAtlas2Based',forceAtlas2Based:{gravitationalConstant:-60,springLength:130,springConstant:.06,avoidOverlap:.6},stabilization:{iterations:300}}}}
+
+function applyLayout(kind,fromLoad){
+  currentLayout=kind;
+  document.querySelectorAll('[data-layout]').forEach(b=>b.classList.toggle('on',b.dataset.layout===kind));
+  const hasPos=fromLoad&&nodes.length>0&&nodes.get().every(n=>typeof n.x==="number"&&typeof n.y==="number");
+  network.setOptions({layout:{hierarchical:false}});
+  if(hasPos){network.setOptions({physics:{enabled:false}});nodes.update(nodes.get().map(n=>({id:n.id,x:n.x,y:n.y})));network.fit({animation:false});return}
+  if(kind==='organic'){
+    nodes.update(nodes.get().map(n=>({id:n.id,fixed:false})));
+    network.setOptions(physicsOptions(true));
+    network.once('stabilizationIterationsDone',()=>{network.setOptions({physics:{enabled:false}});network.fit({animation:{duration:400}});save()});
+    network.stabilize(300);
+  }else if(kind==='hier'){
+    network.setOptions({layout:{hierarchical:{enabled:true,direction:'UD',sortMethod:'directed',levelSeparation:130,nodeSpacing:150,shakeTowards:'roots'}},physics:{enabled:false}});
+    const p=network.getPositions();
+    network.setOptions({layout:{hierarchical:false}});
+    nodes.update(Object.entries(p).map(([id,v])=>({id,x:v.x,y:v.y})));
+    network.fit({animation:{duration:400}});save();
+  }else{
+    network.setOptions({physics:{enabled:false}});
+    const list=nodes.get().sort((a,b)=>degree(b.id)-degree(a.id)||a.type.localeCompare(b.type));
+    let upd=[];
+    if(kind==='circle'){
+      const [hub,...rest]=list;const R=Math.max(180,rest.length*24);
+      upd.push({id:hub.id,x:0,y:0});
+      rest.forEach((n,i)=>{const a=i/rest.length*Math.PI*2-Math.PI/2;upd.push({id:n.id,x:Math.cos(a)*R,y:Math.sin(a)*R})});
+    }else{
+      const byType={};list.forEach(n=>(byType[n.type]=byType[n.type]||[]).push(n));
+      let row=0;
+      Object.keys(TYPES).filter(t=>byType[t]).forEach(t=>{
+        const g=byType[t];const cols=6;
+        g.forEach((n,i)=>upd.push({id:n.id,x:(i%cols)*150,y:(row+Math.floor(i/cols))*120}));
+        row+=Math.ceil(g.length/6);
+      });
+    }
+    nodes.update(upd);network.fit({animation:{duration:400}});save();
+  }
+}
+
+function setBubble(on){
+  bubble=on;$('vMain').classList.toggle('on',!on);$('vBubble').classList.toggle('on',on);
+  nodes.update(nodes.get().map(n=>({id:n.id,size:decorate(n).size})));
+}
+
+let uid=Date.now();
+function addEntity(type,pos){
+  const id='n'+(uid++);
+  const label=TYPES[type].name==='Phrase'?'New phrase':'New '+TYPES[type].name.toLowerCase();
+  const p=pos||network.getViewPosition();
+  nodes.add(decorate({id,type,label,notes:'',bookmark:null,weight:50,x:p.x,y:p.y}));
+  network.selectNodes([id]);renderProps();counts();save();
+  setTimeout(()=>{const f=$('fLabel');if(f){f.focus();f.select()}},30);
+}
+
+function renderPalette(){
+  $('entList').innerHTML=Object.entries(TYPES).map(([k,t])=>`<div class="ent" draggable="true" data-type="${k}"><img src="${iconFor(k)}" alt="">${t.name}</div>`).join('');
+  document.querySelectorAll('.ent').forEach(el=>{
+    el.addEventListener('dragstart',e=>e.dataTransfer.setData('text/entity',el.dataset.type));
+    el.addEventListener('click',()=>addEntity(el.dataset.type));
+  });
+  const wrap=$('net');
+  wrap.addEventListener('dragover',e=>e.preventDefault());
+  wrap.addEventListener('drop',e=>{
+    e.preventDefault();const type=e.dataTransfer.getData('text/entity');if(!TYPES[type])return;
+    const r=wrap.getBoundingClientRect();
+    addEntity(type,network.DOMtoCanvas({x:e.clientX-r.left,y:e.clientY-r.top}));
+  });
+}
+
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+function renderProps(){
+  const sn=network.getSelectedNodes(),se=network.getSelectedEdges();
+  const body=$('propBody');
+  $('stSel').textContent=sn.length?`${sn.length} selected`:(se.length?'Link selected':'');
+  if(sn.length===1){
+    const n=nodes.get(sn[0]);const t=TYPES[n.type];
+    const links=edges.get({filter:e=>e.from===n.id||e.to===n.id});
+    body.innerHTML=`<h3>Entity</h3>
+    <div class="typebadge"><img src="${iconFor(n.type)}" alt="">${t.name}</div>
+    <div class="field"><label>Value</label><input id="fLabel" value="${esc(n.label)}"></div>
+    <div class="field"><label>Type</label><select id="fType">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${k===n.type?'selected':''}>${v.name}</option>`).join('')}</select></div>
+    <div class="field"><label>Weight (${n.weight??50})</label><input id="fWeight" type="range" min="0" max="100" step="1" value="${n.weight??50}"></div>
+    <div class="field"><label>Bookmark</label><div class="bm" id="fBm">${Object.entries(BOOKMARKS).map(([k,c])=>`<span data-bm="${k}" title="${k}" class="${k==='none'?'none':''} ${(n.bookmark||'none')===k?'sel':''}" style="${c?'background:'+c:''}"></span>`).join('')}</div></div>
+    <div class="field"><label>Notes</label><textarea id="fNotes">${esc(n.notes)}</textarea></div>
+    <h3>Links (${links.length})</h3>
+    <div class="links">${links.map(e=>{const o=nodes.get(e.from===n.id?e.to:e.from);return o?`<a data-go="${o.id}">${e.from===n.id?'→':'←'} ${esc(o.label)} <small>${esc(e.label||'')}</small></a>`:''}).join('')||'<span class="hint">No links yet. Use Add link.</span>'}</div>`;
+    $('fLabel').oninput=e=>{nodes.update({id:n.id,label:e.target.value});save()};
+    $('fType').onchange=e=>{const nn=Object.assign(nodes.get(n.id),{type:e.target.value});nodes.update(decorate(nn));renderProps();save()};
+    $('fWeight').oninput=e=>{nodes.update({id:n.id,weight:+e.target.value});e.target.previousElementSibling.textContent=`Weight (${e.target.value})`;save()};
+    $('fNotes').oninput=e=>{nodes.update({id:n.id,notes:e.target.value});save()};
+    $('fBm').querySelectorAll('span').forEach(s=>s.onclick=()=>{const b=s.dataset.bm==='none'?null:s.dataset.bm;const nn=Object.assign(nodes.get(n.id),{bookmark:b});nodes.update(decorate(nn));renderProps();save()});
+    body.querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>{network.selectNodes([a.dataset.go]);network.focus(a.dataset.go,{scale:1.1,animation:{duration:350}});renderProps()});
+  }else if(sn.length>1){
+    const bm=Object.entries(BOOKMARKS).map(([k,c])=>`<span data-bm="${k}" title="${k}" class="${k==='none'?'none':''}" style="${c?'background:'+c:''}"></span>`).join('');
+    body.innerHTML=`<h3>${sn.length} entities selected</h3><div class="field"><label>Bookmark all</label><div class="bm" id="fBm">${bm}</div></div><p class="hint">Delete removes all selected entities and their links.</p>`;
+    $('fBm').querySelectorAll('span').forEach(s=>s.onclick=()=>{const b=s.dataset.bm==='none'?null:s.dataset.bm;nodes.update(sn.map(id=>decorate(Object.assign(nodes.get(id),{bookmark:b}))));save()});
+  }else if(se.length===1){
+    const e=edges.get(se[0]);const a=nodes.get(e.from),b=nodes.get(e.to);
+    const col=typeof e.color==='object'?e.color.color:(e.color||'#6b7383');
+    body.innerHTML=`<h3>Link</h3>
+    <p style="margin:0 0 10px">${esc(a?.label)} → ${esc(b?.label)}</p>
+    <div class="field"><label>Label</label><input id="eLabel" value="${esc(e.label||'')}"></div>
+    <div class="field"><label>Colour</label><select id="eColor">${[['#6b7383','Grey'],['#e5534b','Red'],['#f0883e','Orange'],['#e3c341','Yellow'],['#3fb950','Green'],['#4b8ff0','Blue'],['#a371f7','Purple']].map(([v,l])=>`<option value="${v}" ${v===col?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div class="field"><label>Thickness</label><input id="eWidth" type="range" min="1" max="6" step="0.5" value="${e.width||1.2}"></div>
+    <button id="eFlip">Reverse direction</button>`;
+    $('eLabel').oninput=ev=>{edges.update({id:e.id,label:ev.target.value});save()};
+    $('eColor').onchange=ev=>{edges.update(edgeStyle({id:e.id,color:ev.target.value,width:edges.get(e.id).width}));save()};
+    $('eWidth').oninput=ev=>{edges.update({id:e.id,width:+ev.target.value});save()};
+    $('eFlip').onclick=()=>{const c=edges.get(e.id);edges.update({id:e.id,from:c.to,to:c.from});renderProps();save()};
+  }else{
+    const typeCounts={};nodes.get().forEach(n=>typeCounts[n.type]=(typeCounts[n.type]||0)+1);
+    const top=nodes.get().map(n=>({n,d:degree(n.id)})).sort((a,b)=>b.d-a.d).slice(0,5);
+    body.innerHTML=`<h3>Graph overview</h3>
+    <div class="links">${Object.entries(typeCounts).map(([k,c])=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><img src="${iconFor(k)}" style="width:18px;height:18px" alt="">${TYPES[k]?.name||k}<span style="margin-left:auto;color:var(--muted)">${c}</span></div>`).join('')||'<span class="hint">Empty graph. Drag entities in from the palette.</span>'}</div>
+    ${top.length?`<h3 style="margin-top:14px">Most connected</h3><div class="links">${top.map(({n,d})=>`<a data-go="${n.id}">${esc(n.label)} <small>${d} links</small></a>`).join('')}</div>`:''}
+    <p class="hint">Tip: select an entity to edit it. Shift or Ctrl click to select several.</p>`;
+    body.querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>{network.selectNodes([a.dataset.go]);network.focus(a.dataset.go,{scale:1.1,animation:{duration:350}});renderProps()});
+  }
+}
+
+function setLinkMode(on){
+  linkMode=on;linkFrom=null;$('bLink').classList.toggle('on',on);
+  $('modeBanner').style.display=on?'block':'none';$('modeBanner').textContent='Link mode: click the source entity';
+}
+
+function deleteSel(){
+  const sn=network.getSelectedNodes(),se=network.getSelectedEdges();
+  if(!sn.length&&!se.length)return;
+  const dead=edges.get({filter:e=>sn.includes(e.from)||sn.includes(e.to)}).map(e=>e.id);
+  edges.remove([...new Set([...se,...dead])]);nodes.remove(sn);
+  network.unselectAll();renderProps();counts();save();
+}
+
+function openModal(mode){
+  $('modal').style.display='flex';$('mMsg').textContent='';
+  const imp=mode==='import';
+  $('mTitle').textContent=imp?'Import graph':'Export graph (JSON)';
+  $('mApply').style.display=imp?'':'none';$('mCopy').style.display=imp?'none':'';
+  $('mFileBtn').style.display=imp?'':'none';
+  $('mText').value=imp?'':JSON.stringify(serialise(),null,2);
+  $('mText').placeholder=imp?'Paste exported JSON here, or open a .json file':'';
+  if(!imp)$('mMsg').textContent='Copy this and save it as a .json file to keep your graph.';
+}
+
+function boot(){
+  if(!window.vis){$('loadErr').style.display='flex';return}
+  nodes=new vis.DataSet();edges=new vis.DataSet();
+  network=new vis.Network($('net'),{nodes,edges},Object.assign({
+    interaction:{hover:true,multiselect:true,navigationButtons:false,keyboard:{enabled:false},tooltipDelay:200},
+    nodes:{shape:'image',size:22,font:{color:'#e3e6eb',size:13,face:'system-ui, sans-serif',strokeWidth:3,strokeColor:'#14171c'},
+      shapeProperties:{useBorderWithImage:false,interpolation:true},chosen:{node:(v,id,sel,hov)=>{if(sel){v.size*=1.15}}}},
+    edges:{arrows:{to:{enabled:true,scaleFactor:.55}},smooth:{type:'continuous',roundness:.2},
+      font:{color:'#9aa3b4',size:11,strokeWidth:3,strokeColor:'#14171c',align:'middle'},selectionWidth:1.5,hoverWidth:.5}
+  },physicsOptions(false)));
+
+  network.on('click',p=>{
+    if(linkMode&&p.nodes.length){
+      const id=p.nodes[0];
+      if(!linkFrom){linkFrom=id;$('modeBanner').textContent='Now click the target entity';network.selectNodes([id]);return}
+      if(id!==linkFrom){const eid='e'+(uid++);edges.add(edgeStyle({id:eid,from:linkFrom,to:id,label:''}));setLinkMode(false);network.setSelection({nodes:[],edges:[eid]});renderProps();counts();if(bubble)setBubble(true);save();setTimeout(()=>$('eLabel')?.focus(),30);return}
+    }
+    renderProps();
+  });
+  network.on('doubleClick',p=>{if(!p.nodes.length&&!p.edges.length)addEntity('phrase',p.pointer.canvas)});
+  network.on('dragEnd',p=>{if(p.nodes.length)save()});
+  network.on('selectNode',renderProps);network.on('deselectNode',renderProps);
+
+  renderPalette();
+  $('bLink').onclick=()=>setLinkMode(!linkMode);
+  $('bDelete').onclick=deleteSel;
+  document.querySelectorAll('[data-layout]').forEach(b=>b.onclick=()=>applyLayout(b.dataset.layout));
+  $('vMain').onclick=()=>setBubble(false);$('vBubble').onclick=()=>setBubble(true);
+  $('bFit').onclick=()=>network.fit({animation:{duration:400}});
+  $('search').oninput=e=>{
+    const q=e.target.value.trim().toLowerCase();
+    if(!q){network.unselectAll();renderProps();return}
+    const hits=nodes.get({filter:n=>(n.label||'').toLowerCase().includes(q)||(n.notes||'').toLowerCase().includes(q)}).map(n=>n.id);
+    network.selectNodes(hits);if(hits.length===1)network.focus(hits[0],{scale:1.1,animation:{duration:300}});renderProps();
+  };
+  $('bExport').onclick=()=>openModal('export');$('bImport').onclick=()=>openModal('import');
+  $('bSample').onclick=()=>{load(SAMPLE);save()};
+  let newArmed=false;
+  $('bNew').onclick=()=>{if(!newArmed){newArmed=true;$('bNew').textContent='Click again to clear';setTimeout(()=>{newArmed=false;$('bNew').textContent='New'},2500);return}
+    newArmed=false;$('bNew').textContent='New';nodes.clear();edges.clear();renderProps();counts();save()};
+  $('mClose').onclick=()=>$('modal').style.display='none';
+  $('mCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('mText').value);$('mMsg').textContent='Copied to clipboard'}catch(e){$('mText').select();$('mMsg').textContent='Press Ctrl+C or Cmd+C to copy'}};
+  $('mFileBtn').onclick=()=>$('mFile').click();
+  $('mFile').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{$('mText').value=t;$('mMsg').textContent=f.name+' loaded. Click Load graph.'})};
+  $('mApply').onclick=()=>{try{const d=JSON.parse($('mText').value);if(!Array.isArray(d.nodes)||!Array.isArray(d.edges))throw 0;load(d);save();$('modal').style.display='none'}catch(e){$('mMsg').textContent='That doesn\'t look like a valid graph export.';$('mMsg').style.color='#ffb3ae';setTimeout(()=>$('mMsg').style.color='',2000)}};
+  document.addEventListener('keydown',e=>{
+    if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;
+    if(e.key==='Delete'||e.key==='Backspace'){deleteSel();e.preventDefault()}
+    if(e.key==='Escape'){setLinkMode(false);network.unselectAll();renderProps()}
+    if(e.key==='l'||e.key==='L')setLinkMode(!linkMode);
+  });
+
+  let saved=null;try{saved=JSON.parse(localStorage.getItem(STORE)||'null')}catch(e){}
+  load(saved&&saved.nodes?saved:SAMPLE);
+}
+</script>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js" onerror="var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js';s.onload=boot;s.onerror=boot;document.body.appendChild(s)" onload="boot()"></script>
+</body>
+</html>
