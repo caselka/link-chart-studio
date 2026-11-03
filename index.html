@@ -57,6 +57,15 @@ h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;c
 #modal textarea{min-height:220px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
 #modal .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;align-items:center}
 #modal .msg{flex:1;color:var(--muted);font-size:12px}
+#ctx{position:fixed;display:none;z-index:30;min-width:250px;max-height:70vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+#ctx .hd{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px 4px}
+#ctx .ci{padding:6px 10px;border-radius:5px;cursor:pointer;white-space:nowrap}
+#ctx .ci:hover{background:var(--panel2)}
+#ctx .ci.all{color:#8ec1ff}
+#ctx .sep{height:1px;background:var(--line);margin:4px 2px}
+#toast{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);max-width:70%;background:var(--panel2);border:1px solid var(--line);padding:6px 12px;border-radius:8px;font-size:12px;display:none;z-index:6;white-space:pre-line}
+#toast.err{border-color:var(--danger)}
+.tlist button{display:block;width:100%;text-align:left;margin-bottom:4px}
 #loadErr{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:var(--muted);text-align:center;padding:20px}
 @media (max-width:820px){#main{grid-template-columns:1fr}#palette,#props{display:none}}
 </style>
@@ -105,12 +114,14 @@ h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;c
       <h3>Entity palette</h3>
       <div id="entList"></div>
       <p class="hint">Drag an entity onto the canvas, or click to add it in the middle. Double-click empty canvas to add a phrase.</p>
+      <p class="hint">Right-click a domain, DNS name, IP, AS number or netblock to run transforms.</p>
     </aside>
 
     <div id="canvasWrap">
       <div id="net"></div>
       <div id="modeBanner">Link mode: click the source entity</div>
       <div id="fict">Sample data is fictional</div>
+      <div id="toast"></div>
       <div id="loadErr">The graph library didn't load. Check your connection and reload the page.</div>
     </div>
 
@@ -125,6 +136,7 @@ h3{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;c
   </div>
 </div>
 
+<div id="ctx"></div>
 <div id="modal"><div class="box">
   <h3 id="mTitle">Export</h3>
   <textarea id="mText" spellcheck="false"></textarea>
@@ -149,6 +161,11 @@ const TYPES={
   domain:{name:'Domain',color:'#4b8ff0',glyph:'<circle cx="16" cy="16" r="10" fill="none" stroke="#fff" stroke-width="2.4"/><ellipse cx="16" cy="16" rx="4.5" ry="10" fill="none" stroke="#fff" stroke-width="2"/><path d="M6 16h20" stroke="#fff" stroke-width="2"/>'},
   ip:{name:'IP address',color:'#6c7ea0',glyph:'<rect x="5" y="8" width="22" height="7" rx="1.5"/><rect x="5" y="17" width="22" height="7" rx="1.5"/><g fill="#3e4a60"><circle cx="9" cy="11.5" r="1.4"/><circle cx="9" cy="20.5" r="1.4"/></g>'},
   website:{name:'Website',color:'#3fa0e0',glyph:'<rect x="4" y="7" width="24" height="18" rx="2"/><rect x="4" y="7" width="24" height="5" rx="2" fill="#226a99"/><g fill="#fff"><circle cx="7.5" cy="9.5" r="1"/><circle cx="10.5" cy="9.5" r="1"/></g>'},
+  host:{name:'DNS name',color:'#3c78c8',glyph:'<rect x="6" y="6" width="20" height="20" rx="3" fill="none" stroke="#fff" stroke-width="2.4"/><path d="M11 12h10M11 16h10M11 20h6" stroke="#fff" stroke-width="2"/>'},
+  ns:{name:'Name server',color:'#5a9bd5',glyph:'<rect x="7" y="6" width="18" height="6" rx="1.5"/><rect x="7" y="13" width="18" height="6" rx="1.5"/><rect x="7" y="20" width="18" height="6" rx="1.5"/>'},
+  mx:{name:'Mail server',color:'#b061c9',glyph:'<rect x="5" y="10" width="22" height="14" rx="2"/><path d="M5.5 11l10.5 7 10.5-7" fill="none" stroke="#7a3d8f" stroke-width="2"/>'},
+  asn:{name:'AS number',color:'#4fb0a0',glyph:'<path d="M16 4l10 6v12l-10 6-10-6V10z" fill="none" stroke="#fff" stroke-width="2.4"/><circle cx="16" cy="16" r="3.5"/>'},
+  netblock:{name:'Netblock',color:'#7f8fb0',glyph:'<rect x="6" y="6" width="9" height="9" rx="1"/><rect x="17" y="6" width="9" height="9" rx="1"/><rect x="6" y="17" width="9" height="9" rx="1"/><rect x="17" y="17" width="9" height="9" rx="1"/>'},
   location:{name:'Location',color:'#d9a033',glyph:'<path d="M16 4c-5 0-9 3.8-9 8.8C7 19 16 28 16 28s9-9 9-15.2C25 7.8 21 4 16 4z"/><circle cx="16" cy="12.5" r="3.4" fill="#8a6214"/>'},
   vehicle:{name:'Vehicle',color:'#9aa34a',glyph:'<path d="M5 20l2.5-7h17L27 20v5H5z"/><g fill="#5c6224"><circle cx="10" cy="24" r="2.6"/><circle cx="22" cy="24" r="2.6"/><rect x="9.5" y="14.5" width="13" height="4"/></g>'},
   document:{name:'Document',color:'#a3a9b5',glyph:'<path d="M8 4h11l6 6v18H8z"/><path d="M19 4v6h6" fill="#6b7280"/><g stroke="#6b7280" stroke-width="1.6"><path d="M11 16h11M11 20h11M11 24h7"/></g>'},
@@ -339,12 +356,14 @@ function renderProps(){
     <div class="field"><label>Weight (${n.weight??50})</label><input id="fWeight" type="range" min="0" max="100" step="1" value="${n.weight??50}"></div>
     <div class="field"><label>Bookmark</label><div class="bm" id="fBm">${Object.entries(BOOKMARKS).map(([k,c])=>`<span data-bm="${k}" title="${k}" class="${k==='none'?'none':''} ${(n.bookmark||'none')===k?'sel':''}" style="${c?'background:'+c:''}"></span>`).join('')}</div></div>
     <div class="field"><label>Notes</label><textarea id="fNotes">${esc(n.notes)}</textarea></div>
+    ${(TRANSFORMS[n.type]||[]).length?`<h3>Transforms</h3><div class="tlist">${TRANSFORMS[n.type].map((t,i)=>`<button data-tr="${i}">${esc(t.name)}</button>`).join('')}</div>`:''}
     <h3>Links (${links.length})</h3>
     <div class="links">${links.map(e=>{const o=nodes.get(e.from===n.id?e.to:e.from);return o?`<a data-go="${o.id}">${e.from===n.id?'→':'←'} ${esc(o.label)} <small>${esc(e.label||'')}</small></a>`:''}).join('')||'<span class="hint">No links yet. Use Add link.</span>'}</div>`;
     $('fLabel').oninput=e=>{nodes.update({id:n.id,label:e.target.value});save()};
     $('fType').onchange=e=>{const nn=Object.assign(nodes.get(n.id),{type:e.target.value});nodes.update(decorate(nn));renderProps();save()};
     $('fWeight').oninput=e=>{nodes.update({id:n.id,weight:+e.target.value});e.target.previousElementSibling.textContent=`Weight (${e.target.value})`;save()};
     $('fNotes').oninput=e=>{nodes.update({id:n.id,notes:e.target.value});save()};
+    body.querySelectorAll('[data-tr]').forEach(b=>b.onclick=()=>runTransforms([TRANSFORMS[n.type][+b.dataset.tr]],[n.id]));
     $('fBm').querySelectorAll('span').forEach(s=>s.onclick=()=>{const b=s.dataset.bm==='none'?null:s.dataset.bm;const nn=Object.assign(nodes.get(n.id),{bookmark:b});nodes.update(decorate(nn));renderProps();save()});
     body.querySelectorAll('[data-go]').forEach(a=>a.onclick=()=>{network.selectNodes([a.dataset.go]);network.focus(a.dataset.go,{scale:1.1,animation:{duration:350}});renderProps()});
   }else if(sn.length>1){
@@ -399,6 +418,158 @@ function openModal(mode){
   if(!imp)$('mMsg').textContent='Copy this and save it as a .json file to keep your graph.';
 }
 
+// ---- Transforms: infrastructure lookups against free public sources ----
+const MAXRES=50;
+const DNSNUM={A:1,NS:2,CNAME:5,PTR:12,MX:15,TXT:16,AAAA:28};
+const SLD2=['com.au','net.au','org.au','edu.au','gov.au','asn.au','id.au','co.uk','org.uk','gov.uk','ac.uk','co.nz','org.nz','govt.nz','co.jp','com.br','com.cn','co.za','com.sg','co.in'];
+const clean=s=>String(s).trim().toLowerCase().replace(/\.$/,'');
+function regDomain(h){const p=clean(h).split('.');if(p.length<=2)return p.join('.');return SLD2.includes(p.slice(-2).join('.'))?p.slice(-3).join('.'):p.slice(-2).join('.')}
+function needHost(v){v=clean(v);if(!/^([a-z0-9_-]+\.)+[a-z]{2,}$/.test(v))throw new Error(`"${v}" isn't a valid domain name`);return v}
+function needIP(v){v=v.trim();if(!/^\d{1,3}(\.\d{1,3}){3}$/.test(v)&&!/^[0-9a-f:]+$/i.test(v))throw new Error(`"${v}" isn't a valid IP address`);return v}
+function asNum(v){const m=String(v).match(/(?:AS)?\s*(\d+)/i);if(!m)throw new Error(`"${v}" isn't an AS number`);return m[1]}
+async function getJSON(url,timeout=25000){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout),host=new URL(url).host;
+  try{const r=await fetch(url,{signal:c.signal});if(!r.ok)throw new Error(`${host} returned ${r.status}${r.status===429?' (rate limited, try later)':''}`);return await r.json()}
+  catch(e){if(e.name==='AbortError')throw new Error(`${host} timed out`);if(e instanceof TypeError)throw new Error(`Couldn't reach ${host}`);throw e}
+  finally{clearTimeout(t)}
+}
+async function dns(name,type){
+  const d=await getJSON(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${type}`);
+  return (d.Answer||[]).filter(a=>a.type===DNSNUM[type]).map(a=>a.data);
+}
+function ptrName(ip){
+  if(!ip.includes(':'))return ip.split('.').reverse().join('.')+'.in-addr.arpa';
+  const [h,t]=ip.split('::'),hs=h?h.split(':'):[],ts=t?t.split(':'):[];
+  const groups=t===undefined?hs:[...hs,...Array(8-hs.length-ts.length).fill('0'),...ts];
+  return groups.map(g=>g.padStart(4,'0')).join('').split('').reverse().join('.')+'.ip6.arpa';
+}
+function rdapEntities(list,acc=[]){(list||[]).forEach(e=>{acc.push(e);rdapEntities(e.entities,acc)});return acc}
+function vcard(e,key){const f=(e.vcardArray?.[1]||[]).find(x=>x[0]===key);return f?String(Array.isArray(f[3])?f[3].join(' '):f[3]).trim():''}
+const redacted=s=>!s||/redact|privacy|withheld|not disclosed|data protected|proxy/i.test(s);
+// Only organisations are added from registry records; individuals are left out.
+function rdapOrgs(d,roles){
+  return rdapEntities(d.entities).filter(e=>(e.roles||[]).some(r=>roles.includes(r))&&vcard(e,'kind')!=='individual')
+    .map(e=>({role:(e.roles||[]).find(r=>roles.includes(r)),name:vcard(e,'fn')||vcard(e,'org')})).filter(o=>!redacted(o.name));
+}
+const rdapDates=d=>(d.events||[]).filter(e=>!/rdap database/i.test(e.eventAction)).map(e=>`  ${e.eventAction}: ${String(e.eventDate).slice(0,10)}`).join('\n');
+
+const toIPs={name:'To IP addresses [DNS]',run:async v=>{v=needHost(v);const ips=[...await dns(v,'A'),...await dns(v,'AAAA')];return {out:ips.map(ip=>({type:'ip',label:ip,edge:'resolves to'}))}}};
+const toCNAME={name:'To CNAME [DNS]',run:async v=>({out:(await dns(needHost(v),'CNAME')).map(c=>({type:'host',label:clean(c),edge:'alias of'}))})};
+const toDomain={name:'To parent domain',run:async v=>{const d=regDomain(needHost(v));return {out:d===clean(v)?[]:[{type:'domain',label:d,edge:'part of'}]}}};
+const TRANSFORMS={
+  domain:[
+    toIPs,
+    {name:'To name servers [DNS]',run:async v=>({out:(await dns(needHost(v),'NS')).map(n=>({type:'ns',label:clean(n),edge:'name server'}))})},
+    {name:'To mail servers [DNS]',run:async v=>({out:(await dns(needHost(v),'MX')).map(m=>{const [p,h]=m.split(' ');return {type:'mx',label:clean(h||p),edge:'mail server',notes:h?`MX priority ${p}`:''}})})},
+    {name:'To TXT records [DNS, into notes]',run:async v=>{const t=await dns(needHost(v),'TXT');return {out:[],notes:'TXT records [DNS]:\n'+(t.length?t.map(x=>'  '+x.replace(/" "/g,'').replace(/^"|"$/g,'')).join('\n'):'  none')}}},
+    {name:'To subdomains [crt.sh certificates]',run:async v=>{
+      v=needHost(v);const d=await getJSON(`https://crt.sh/?q=${encodeURIComponent('%.'+v)}&output=json`,60000);
+      const s=new Set();d.forEach(c=>String(c.name_value||'').split('\n').forEach(n=>{n=clean(n).replace(/^\*\./,'');if(n.endsWith('.'+v))s.add(n)}));
+      const all=[...s].sort();
+      return {out:all.slice(0,MAXRES).map(n=>({type:'host',label:n,edge:'subdomain'})),notes:all.length>MAXRES?`Subdomains [crt.sh]: ${all.length} found, first ${MAXRES} added`:null};
+    }},
+    {name:'To registration details [RDAP]',run:async v=>{
+      const d=await getJSON('https://rdap.org/domain/'+encodeURIComponent(needHost(v)));
+      const out=rdapOrgs(d,['registrar','registrant']).map(o=>({type:'org',label:o.name,edge:o.role}));
+      (d.nameservers||[]).forEach(n=>n.ldhName&&out.push({type:'ns',label:clean(n.ldhName),edge:'name server'}));
+      return {out,notes:`Registration [RDAP]:\n${rdapDates(d)}${d.status?.length?`\n  status: ${d.status.join(', ')}`:''}`};
+    }},
+    {name:'To website [www]',run:async v=>({out:[{type:'website',label:'www.'+needHost(v),edge:'website'}]})},
+  ],
+  host:[toIPs,toCNAME,toDomain],
+  website:[toIPs,toCNAME,toDomain],
+  ns:[toIPs,toDomain],
+  mx:[toIPs,toDomain],
+  email:[{name:'To domain',run:async v=>{const d=v.split('@')[1];if(!d)throw new Error(`"${v}" isn't an email address`);return {out:[{type:'domain',label:needHost(d),edge:'email domain'}]}}}],
+  ip:[
+    {name:'To DNS name [reverse DNS]',run:async v=>({out:(await dns(ptrName(needIP(v)),'PTR')).map(h=>({type:'host',label:clean(h),edge:'reverse DNS'}))})},
+    {name:'To ASN and netblock [RIPEstat]',run:async v=>{
+      const d=(await getJSON('https://stat.ripe.net/data/network-info/data.json?resource='+encodeURIComponent(needIP(v)))).data||{};
+      const out=[];if(d.prefix)out.push({type:'netblock',label:d.prefix,edge:'in netblock'});
+      for(const a of (d.asns||[]).slice(0,5)){
+        let holder='';try{holder=(await getJSON('https://stat.ripe.net/data/as-overview/data.json?resource=AS'+a)).data?.holder||''}catch(e){}
+        out.push({type:'asn',label:'AS'+a,edge:'announced by',notes:holder?`Holder: ${holder}`:''});
+      }
+      return {out};
+    }},
+    {name:'To location [ipinfo.io]',run:async v=>{
+      const d=await getJSON(`https://ipinfo.io/${encodeURIComponent(needIP(v))}/json`);
+      const place=[d.city,d.region,d.country].filter(Boolean).join(', ');
+      return {out:place?[{type:'location',label:place,edge:'geolocates to',notes:'Approximate. IP geolocation is usually city-level at best and often wrong for mobile, VPN and cloud addresses.'}]:[],
+        notes:`IP info [ipinfo.io]:${d.org?`\n  network: ${d.org}`:''}${d.hostname?`\n  hostname: ${d.hostname}`:''}${d.anycast?'\n  anycast: yes':''}`};
+    }},
+    {name:'To owner [RDAP]',run:async v=>{
+      const d=await getJSON('https://rdap.org/ip/'+encodeURIComponent(needIP(v)));
+      const out=rdapOrgs(d,['registrant','administrative']).map(o=>({type:'org',label:o.name,edge:'registered to'}));
+      const range=d.startAddress?`\n  range: ${d.startAddress} - ${d.endAddress}`:'';
+      return {out:out.filter((o,i)=>out.findIndex(x=>x.label===o.label)===i),notes:`Registration [RDAP]:${d.name?`\n  net name: ${d.name}`:''}${range}${d.country?`\n  country: ${d.country}`:''}\n${rdapDates(d)}`};
+    }},
+  ],
+  asn:[
+    {name:'To owner [RIPEstat]',run:async v=>{const h=(await getJSON('https://stat.ripe.net/data/as-overview/data.json?resource=AS'+asNum(v))).data?.holder;return {out:h?[{type:'org',label:h,edge:'operated by'}]:[]}}},
+    {name:'To announced netblocks [RIPEstat]',run:async v=>{
+      const p=((await getJSON('https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS'+asNum(v),40000)).data?.prefixes||[]).map(x=>x.prefix);
+      return {out:p.slice(0,MAXRES).map(x=>({type:'netblock',label:x,edge:'announces'})),notes:p.length>MAXRES?`Announced netblocks [RIPEstat]: ${p.length} found, first ${MAXRES} added`:null};
+    }},
+  ],
+  netblock:[
+    {name:'To ASN [RIPEstat]',run:async v=>({out:(((await getJSON('https://stat.ripe.net/data/network-info/data.json?resource='+encodeURIComponent(v.trim()))).data||{}).asns||[]).map(a=>({type:'asn',label:'AS'+a,edge:'announced by'}))})},
+  ],
+};
+
+let toastTimer=null;
+function toast(msg,err,stay){
+  const t=$('toast');t.textContent=msg;t.classList.toggle('err',!!err);t.style.display='block';
+  clearTimeout(toastTimer);if(!stay)toastTimer=setTimeout(()=>t.style.display='none',err?9000:5000);
+}
+function appendNotes(id,text){
+  if(!text)return;const n=nodes.get(id);if((n.notes||'').includes(text))return;
+  nodes.update({id,notes:(n.notes?n.notes+'\n\n':'')+text});
+}
+function applyResult(src,r){
+  let added=0,linked=0;
+  appendNotes(src.id,r.notes);
+  const outs=r.out||[],c=network.getPositions([src.id])[src.id]||{x:0,y:0},R=150+outs.length*5,off=Math.random()*Math.PI;
+  outs.forEach((o,i)=>{
+    let tgt=nodes.get({filter:n=>n.type===o.type&&String(n.label).toLowerCase()===o.label.toLowerCase()})[0];
+    if(!tgt){
+      const a=off+i/outs.length*Math.PI*2,id='n'+(uid++);
+      nodes.add(decorate({id,type:o.type,label:o.label,notes:o.notes||'',bookmark:null,weight:50,x:c.x+Math.cos(a)*R,y:c.y+Math.sin(a)*R}));
+      tgt=nodes.get(id);added++;
+    }else appendNotes(tgt.id,o.notes);
+    if(tgt.id===src.id)return;
+    if(!edges.get({filter:e=>e.from===src.id&&e.to===tgt.id}).length){edges.add(edgeStyle({id:'e'+(uid++),from:src.id,to:tgt.id,label:o.edge||''}));linked++}
+  });
+  return {added,linked,found:outs.length};
+}
+async function runTransforms(list,ids){
+  const targets=ids.map(id=>nodes.get(id)).filter(Boolean);
+  const errors=[];let added=0,linked=0,found=0,done=0;const total=list.length*targets.length;
+  for(const t of list)for(const n of targets){
+    toast(`Running ${t.name} on ${n.label} (${++done}/${total})`,false,true);
+    try{const r=applyResult(n,await t.run(String(n.label),n));added+=r.added;linked+=r.linked;found+=r.found}
+    catch(e){errors.push(`${n.label}: ${e.message}`)}
+  }
+  errors.splice(0,errors.length,...new Set(errors));
+  counts();renderProps();if(bubble)setBubble(true);save();
+  const sum=found?`Done: ${found} result${found===1?'':'s'}, ${added} new entit${added===1?'y':'ies'}, ${linked} new link${linked===1?'':'s'}`:'Done: no results';
+  toast(errors.length?`${sum}\n${errors.slice(0,4).join('\n')}${errors.length>4?`\n…and ${errors.length-4} more errors`:''}`:sum,errors.length>0);
+}
+function hideCtx(){$('ctx').style.display='none'}
+function showCtx(x,y,id){
+  const n=nodes.get(id),list=TRANSFORMS[n.type]||[];
+  const sel=network.getSelectedNodes().filter(s=>nodes.get(s)?.type===n.type);
+  const ids=sel.includes(id)?sel:[id];
+  const m=$('ctx');
+  m.innerHTML=`<div class="hd">${esc(TYPES[n.type]?.name||n.type)} transforms${ids.length>1?` · ${ids.length} selected`:''}</div>`+
+    (list.length?`<div class="ci all" data-t="all">Run all transforms</div><div class="sep"></div>`+list.map((t,i)=>`<div class="ci" data-t="${i}">${esc(t.name)}</div>`).join(''):`<div class="ci" style="color:var(--muted);cursor:default">No transforms for this entity type</div>`)+
+    `<div class="sep"></div><div class="ci" data-act="copy">Copy value</div>`;
+  m.style.display='block';
+  m.style.left=Math.min(x,innerWidth-m.offsetWidth-8)+'px';m.style.top=Math.min(y,innerHeight-m.offsetHeight-8)+'px';
+  m.querySelectorAll('[data-t]').forEach(el=>el.onclick=()=>{hideCtx();runTransforms(el.dataset.t==='all'?list:[list[+el.dataset.t]],ids)});
+  m.querySelector('[data-act=copy]').onclick=()=>{hideCtx();navigator.clipboard?.writeText(String(n.label)).then(()=>toast('Copied'),()=>{})};
+}
+
 function boot(){
   if(!window.vis){$('loadErr').style.display='flex';return}
   nodes=new vis.DataSet();edges=new vis.DataSet();
@@ -420,6 +591,14 @@ function boot(){
   });
   network.on('doubleClick',p=>{if(!p.nodes.length&&!p.edges.length)addEntity('phrase',p.pointer.canvas)});
   network.on('dragEnd',p=>{if(p.nodes.length)save()});
+  network.on('oncontext',p=>{
+    p.event.preventDefault();const id=network.getNodeAt(p.pointer.DOM);
+    if(!id){hideCtx();return}
+    if(!network.getSelectedNodes().includes(id)){network.selectNodes([id]);renderProps()}
+    showCtx(p.event.clientX,p.event.clientY,id);
+  });
+  network.on('dragStart',hideCtx);network.on('zoom',hideCtx);
+  document.addEventListener('mousedown',e=>{if(!$('ctx').contains(e.target))hideCtx()});
   network.on('selectNode',renderProps);network.on('deselectNode',renderProps);
 
   renderPalette();
@@ -452,7 +631,7 @@ function boot(){
     if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='o'){e.preventDefault();openFile();return}
     if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;
     if(e.key==='Delete'||e.key==='Backspace'){deleteSel();e.preventDefault()}
-    if(e.key==='Escape'){setLinkMode(false);network.unselectAll();renderProps()}
+    if(e.key==='Escape'){hideCtx();setLinkMode(false);network.unselectAll();renderProps()}
     if(e.key==='l'||e.key==='L')setLinkMode(!linkMode);
   });
 
